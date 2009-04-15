@@ -1,0 +1,247 @@
+<html>
+	<head>
+        <title>MEMO</title>
+        <link href="app.css" rel="stylesheet" type="text/css"/>
+		<script type="text/javascript" src="lib/air/AIRAliases.js"></script>
+        <script type="text/javascript" src="lib/jquery/jquery-1.3.2.js"></script>
+        <script type="text/javascript">
+        	var conn = null;
+			var list = null;
+			var id = null;
+			
+			$(function() {
+				init();
+				createTable();
+				list = getList();
+				renderList();
+				
+				$("#save").click(save);
+				$("#cancel").click(renderList);
+				$("#new").click(renderCreate);
+			});
+			
+			function init() {
+				conn = new air.SQLConnection();
+				
+				try {
+					var dbFile = air.File.applicationStorageDirectory.resolvePath("memo.db");
+					conn.open(dbFile);
+				} catch (error) {
+					air.trace("error.message:", error.message);
+					air.trace("error.details:", error.details);
+					
+					return;
+				}
+				
+				createTable();
+			}
+
+			function createTable() {
+				var createStmt = new air.SQLStatement();
+				
+				createStmt.sqlConnection = conn;
+				var sql = "CREATE TABLE IF NOT EXISTS memos (";
+				sql += "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+				sql += "title TEXT,";
+				sql += "body TEXT";
+				sql += ")";
+				createStmt.text = sql;
+				
+				try {
+					createStmt.execute();
+				} catch (error) {
+					air.trace("CREATE TABLE error:", eroor);
+					air.trace("error.message:", error.message);
+					air.trace("error.details", error.details);
+					
+					return;
+				}
+			}
+			
+			function getList() {
+				selectStmt = new air.SQLStatement();
+				selectStmt.sqlConnection = conn;
+				var sql = "SELECT id, title FROM memos ORDER BY id DESC";
+				selectStmt.text = sql;
+				
+				try {
+					selectStmt.execute();
+					
+					return selectStmt.getResult().data;
+				} catch (error) {
+					air.trace("SELECT error:", eroor);
+					air.trace("error.message:", error.message);
+					air.trace("error.details", error.details);
+					
+					return;
+				}
+			}
+			
+			function getData(id) {
+				selectStmt = new air.SQLStatement();
+				selectStmt.sqlConnection = conn;
+				var sql = "SELECT id, title, body FROM memos ";
+				sql += "WHERE id = " + id;
+				selectStmt.text = sql;
+				
+				try {
+					selectStmt.execute();
+					
+					return selectStmt.getResult().data[0];
+				} catch (error) {
+					air.trace("SELECT error:", error);
+					air.trace("error.message:", error.message);
+					air.trace("error.details", error.details);
+					
+					return;
+				}
+			}
+			
+			function save() {
+				var id = $("#id").val();
+				var title = $("#title").val();
+				var body = $("#body").val();
+				
+				insertStmt = new air.SQLStatement();
+				insertStmt.sqlConnection = conn;
+				
+				var sql = "";
+				if (id == "") {
+					sql = "INSERT INTO memos (title, body) ";
+					sql += "VALUES ('" + title + "', '" + body + "')";
+				} else {
+					sql = "UPDATE memos SET ";
+					sql += "title = '" + title + "', ";
+					sql += "body = '" + body + "' ";
+					sql	+= "WHERE id = " + id;
+				}
+				
+				insertStmt.text = sql;
+				
+				try {
+					insertStmt.execute();
+				} catch (error) {
+					air.trace("INSERT/UPDATE error:", error);
+					air.trace("error.message:", error.message);
+					air.trace("error.details", error.details);
+					
+					return;
+				}
+				
+				list = getList();
+				renderList();
+				
+				return false;
+			}
+			
+			function destroy() {
+				var id = $("#id").val();
+				var title = $("#title").val();
+				var body = $("#body").val();
+				
+				deleteStmt = new air.SQLStatement();
+				deleteStmt.sqlConnection = conn;
+				
+				var sql = "DELETE FROM memos WHERE id = " + id;
+				deleteStmt.text = sql;
+				
+				try {
+					deleteStmt.execute();
+				} catch (error) {
+					deleteStmt.innerText = "Error delete data";
+					
+					air.trace("DELETE error:", error);
+					air.trace("error.message:", error.message);
+					air.trace("error.details", error.details);
+					
+					return;
+				}
+				
+				list = getList();
+				renderList();
+				
+				return false;
+			}
+			
+			function renderList() {
+				$(".view").hide();
+				$("#list").show();
+				
+				var ul = $("#list ul");
+				ul.empty();
+				
+				if (list == null) return;
+				
+				var l = list.length;
+				for (var i = 0; i < l; i++) {
+					var onclick = function(mid) {
+						return function(){
+							id = mid;
+							renderEdit();
+						};
+					};
+					ul.append($("<li>").append($("<a>").attr("href", "#").html(list[i].title).click(onclick(list[i].id))));
+				}
+				
+				return false;
+			}
+			
+			function renderCreate() {
+				$(".view").hide();
+				$("#edit").show();
+				
+				$("#delete").remove();
+				
+				$("#title").focus();
+				
+				$("#id").val("");
+				$("#title").val("");
+				$("#body").val("");
+								
+				return false;
+			}
+			
+			function renderEdit() {
+				$(".view").hide();
+				$("#edit").show();
+				
+				$("#delete").remove();
+				
+				var data = getData(id);
+				$("#id").val(data.id);
+				$("#title").val(data.title);
+				$("#body").val(data.body);
+				
+				$("#edit form").append($("<button>").attr("id", "delete").html("delete").click(function() {
+					if (confirm("Delete this memo?")) {
+						id = data.id;
+						destroy();
+					}
+					return false;
+				}));
+				
+				return false;
+			}
+        
+        </script>
+	</head>
+
+    <body>
+    	<h1>MEMO</h1>
+    	<div id="main">
+    		<div class="view" id="list" style="display:none">
+				<button id="new">new memo</button>
+    			<ul></ul>				
+			</div>
+    		<div class="view" id="edit" style="display:none">
+    			<form>
+    				<input type="hidden" id="id" />
+	    			<input type="text" id="title" /><br />
+					<textarea id="body"></textarea><br />
+					<button id="save">save</button>
+					<button id="cancel">cancel</button><br />
+				</form>
+    		</div>
+    	</div>
+    </body>
+</html>
